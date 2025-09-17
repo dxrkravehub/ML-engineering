@@ -1,6 +1,7 @@
 import pandas as pd
 import random
-import sys # для проверки где выполняется среда можно исключить для оптимизаций 
+import zipfile
+import os
 
 # Настройки категорий
 TRAVEL_CATS = {'Путешествия', 'Отели', 'Такси', 'Поезда', 'Самолеты'}
@@ -14,7 +15,7 @@ def monthly_sum(group, cats):
     return group.loc[group['category'].isin(cats), 'amount'].sum() / 3.0
 
 def total_monthly_spending(group):
-    return group['amount'].sum().sum() / 3.0 # Sum across all rows and then divide by 3
+    return group['amount'].sum().sum() / 3.0
 
 def top3_categories_monthly(group):
     s = group.groupby('category')['amount'].sum().sort_values(ascending=False)
@@ -32,7 +33,7 @@ def monthly_cash_card_transfers(tr_group):
 def relevance_cash_loan(tg, tr_group):
     debt_types = {'loan_payment_out', 'cc_repayment_out', 'installment_payment_out'}
     debts = tr_group.loc[tr_group['type'].isin(debt_types), 'amount'].sum() / 3.0
-    total = tg['amount'].sum().sum() / 3.0 # Sum across all rows and then divide by 3
+    total = tg['amount'].sum().sum() / 3.0
     ratio = debts / max(total, 1)
     return ratio >= 0.2
 
@@ -55,7 +56,7 @@ def calc_benefits(tg, trg, avg_balance):
     jewelry = monthly_sum(tg, JEWELRY_CATS)
     perfume = monthly_sum(tg, PERFUME_CATS)
     boosted = restaurants + jewelry + perfume
-    other = max(tg['amount'].sum().sum()/3 - boosted, 0) # Sum across all rows and then divide by 3
+    other = max(tg['amount'].sum().sum()/3 - boosted, 0)
     if avg_balance >= 6_000_000: rate = 0.04
     elif avg_balance >= 1_000_000: rate = 0.03
     else: rate = 0.02
@@ -77,7 +78,6 @@ def calc_benefits(tg, trg, avg_balance):
     ctx['Обмен валют'] = {'fx_curr': 'USD', 'fx_vol': fx_vol}
 
     # Депозиты
-    # Учитываем только при значительном остатке
     if avg_balance > 100000:
         benefits['Депозит Мультивалютный'] = (avg_balance * 0.145) / 12.0
         benefits['Депозит Сберегательный'] = (avg_balance * 0.165) / 12.0
@@ -87,32 +87,27 @@ def calc_benefits(tg, trg, avg_balance):
         benefits['Депозит Сберегательный'] = 0
         benefits['Депозит Накопительный'] = 0
 
-
     # Инвестиции
-    # Упрощенная логика: предлагаем инвестиции при высоком балансе
     if avg_balance > 500000:
-        benefits['Инвестиции'] = avg_balance * 0.005 # Условная выгода
+        benefits['Инвестиции'] = avg_balance * 0.005
     else:
         benefits['Инвестиции'] = 0
 
     # Кредит наличными
     if relevance_cash_loan(tg, trg):
-        benefits['Кредит наличными'] = 1 # Условная выгода, просто чтобы рекомендовать
+        benefits['Кредит наличными'] = 1
     else:
         benefits['Кредит наличными'] = 0
 
     # Золотые слитки
-    # Упрощенная логика: предлагаем золотые слитки при очень высоком балансе
     if avg_balance > 10000000:
-         benefits['Золотые слитки'] = avg_balance * 0.001 # Условная выгода
+         benefits['Золотые слитки'] = avg_balance * 0.001
     else:
          benefits['Золотые слитки'] = 0
-
 
     return benefits, ctx
 
 # === Альтернативные шаблоны пушей ===
-# Adding age-specific variations
 push_templates = {
     'Карта для путешествий': {
         'young': ["{name}, много поездок/такси в этом месяце? 🚗 С тревел-картой часть расходов вернулась бы кешбэком. Хочешь оформить?",
@@ -179,7 +174,6 @@ push_templates = {
 
 #Генерация пуша с вариативностью
 def make_push(name, product, ctx, avg_balance, age):
-    # возраст определяем для того чтобы в дальнейшем работать по нему
     if age is not None:
         if age <= 30:
             age_group = 'young'
@@ -188,32 +182,28 @@ def make_push(name, product, ctx, avg_balance, age):
         else:
             age_group = 'adult'
     else:
-        age_group = 'adult' # Default if age is unknown
+        age_group = 'adult'
 
     templates = push_templates.get(product, {}).get(age_group)
     if not templates:
         templates = push_templates.get(product, {}).get('adult')
         if not templates:
-             # фолбэки
              return f"{name}, у нас есть предложение под ваши привычки расходов. Посмотреть детали."
 
     tpl = random.choice(templates)
     try:
-        # Format numbers with space as thousand separator and comma as decimal separator
         formatted_balance = f"{avg_balance:,.0f}".replace(",", " ")
-        # Additional formatting for categories if needed, though they are strings
         cat1 = ctx.get('top3', ['—','—','—'])[0]
         cat2 = ctx.get('top3', ['—','—','—'])[1]
         cat3 = ctx.get('top3', ['—','—','—'])[2]
 
         return tpl.format(
             name=name,
-            # Removed sum_taxi and travel_percentage as they are not in new template
             cat1=cat1,
             cat2=cat2,
             cat3=cat3,
             fx_curr=ctx.get('fx_curr', 'валюте'),
-            balance=formatted_balance # Use formatted balance
+            balance=formatted_balance
         )
     except KeyError as e:
         print(f"Error formatting push for product {product} for age group {age_group}: Missing key {e}")
@@ -222,102 +212,128 @@ def make_push(name, product, ctx, avg_balance, age):
          print(f"Error formatting push for product {product} for age group {age_group}: {e}")
          return f"{name}, у нас есть предложение под ваши привычки расходов. Посмотреть детали."
 
-
-# Основной цикл по 60 клиентам 
-rows = []
-used_pushes = set()
-
-# Load clients data
-try:
-    clients_df = pd.read_csv('clients.csv')
-    clients_df.set_index('client_code', inplace=True)
-except FileNotFoundError:
-    print("Clients file not found. Cannot use client status or age for prioritization/personalization.")
-    clients_df = pd.DataFrame() # Create empty DataFrame to avoid errors
-
-
-for i in range(1, 61):
-    tx_file = f"client_{i}_transactions_3m.csv"
-    tr_file = f"client_{i}_transfers_3m.csv"
+# Function to process the zip file
+def process_zip_file(zip_file_path):
+    output_dir = "extracted_data"
+    os.makedirs(output_dir, exist_ok=True)
 
     try:
-        tg = pd.read_csv(tx_file)
-        trg = pd.read_csv(tr_file)
+        with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+            zip_ref.extractall(output_dir)
+    except zipfile.BadZipFile:
+        print("Ошибка: Некорректный ZIP-файл.")
+        return None, None
     except FileNotFoundError:
-        print(f"Files not found for client {i}. Skipping.")
-        continue
+        print(f"Ошибка: ZIP-файл '{zip_file_path}' не найден.")
+        return None, None
 
-    name = tg['name'].iloc[0]
-    avg_balance = tg['avg_monthly_balance_KZT'].iloc[0] if 'avg_monthly_balance_KZT' in tg.columns else 0
-    client_status = clients_df.loc[i, 'status'] if i in clients_df.index else None
-    client_age = clients_df.loc[i, 'age'] if i in clients_df.index else None # Get client age
+    clients_file_path = None
+    for root, dirs, files in os.walk(output_dir):
+        if 'clients.csv' in files:
+            clients_file_path = os.path.join(root, 'clients.csv')
+            break
+
+    if not clients_file_path:
+        print("Ошибка: Файл clients.csv не найден в архиве.")
+        return None, None
+
+    try:
+        clients_df = pd.read_csv(clients_file_path)
+        clients_df.set_index('client_code', inplace=True)
+    except Exception as e:
+        print(f"Ошибка при чтении clients.csv: {e}")
+        return None, None
+
+    return output_dir, clients_df
+
+# Main processing logic
+def process_client_data(data_dir, clients_df):
+    rows = []
+    used_pushes = set()
+
+    for i in range(1, 61):
+        tx_file = os.path.join(data_dir, f"client_{i}_transactions_3m.csv")
+        tr_file = os.path.join(data_dir, f"client_{i}_transfers_3m.csv")
+
+        # Search for transaction and transfer files recursively
+        found_tx = False
+        for root, dirs, files in os.walk(data_dir):
+            if f"client_{i}_transactions_3m.csv" in files:
+                tx_file = os.path.join(root, f"client_{i}_transactions_3m.csv")
+                found_tx = True
+                break
+
+        found_tr = False
+        for root, dirs, files in os.walk(data_dir):
+             if f"client_{i}_transfers_3m.csv" in files:
+                 tr_file = os.path.join(root, f"client_{i}_transfers_3m.csv")
+                 found_tr = True
+                 break
 
 
-    benefits, ctx = calc_benefits(tg, trg, avg_balance)
-    filtered = {k: v for k, v in benefits.items() if v > 0}
+        if not found_tx or not found_tr:
+            print(f"Файлы транзакций или переводов не найдены для клиента {i}. Пропускаем.")
+            continue
 
-    # выбираем продукт из выборки в N продуктов затем фильтр
+        try:
+            tg = pd.read_csv(tx_file)
+            trg = pd.read_csv(tr_file)
+        except Exception as e:
+            print(f"Ошибка при чтении файлов для клиента {i}: {e}. Пропускаем.")
+            continue
 
-    best_product = None
-    if filtered:
-        sorted_benefits = sorted(filtered.items(), key=lambda item: item[1], reverse=True)
-        top_n_products = [item[0] for item in sorted_benefits[:4]] # Consider top 4 for prioritization
+        name = tg['name'].iloc[0]
+        avg_balance = tg['avg_monthly_balance_KZT'].iloc[0] if 'avg_monthly_balance_KZT' in tg.columns else 0
+        client_status = clients_df.loc[i, 'status'] if i in clients_df.index and 'status' in clients_df.columns else None
+        client_age = clients_df.loc[i, 'age'] if i in clients_df.index and 'age' in clients_df.columns else None
 
-        # benefit rank and client status
-        product_weights = {}
-        for rank, product in enumerate(top_n_products):
-            weight = (4 - rank) # система ранга и экстра веса конечно нельзя так хардкодить но на хакатоне можно думаю :D
-            if client_status == 'Премиальный клиент' and product in ['Премиальная карта', 'Золотые слитки', 'Инвестиции']:
-                 weight += 2
-            elif client_status == 'Студент' and product in ['Кредитная карта']:
-                 weight += 2
-            elif client_status == 'Зарплатный клиент' and product in ['Кредитная карта', 'Карта для путешествий']:
-                 weight += 1
+        benefits, ctx = calc_benefits(tg, trg, avg_balance)
+        filtered = {k: v for k, v in benefits.items() if v > 0}
 
-            product_weights[product] = weight
+        best_product = None
+        if filtered:
+            sorted_benefits = sorted(filtered.items(), key=lambda item: item[1], reverse=True)
+            top_n_products = [item[0] for item in sorted_benefits[:4]]
 
-        # фильтр продуктов и шаблонов
-        available_products = [p for p in product_weights.keys() if p in push_templates and (push_templates[p].get('young') or push_templates[p'].get('adult') or push_templates[p].get('senior'))]
+            product_weights = {}
+            for rank, product in enumerate(top_n_products):
+                weight = (4 - rank)
+                if client_status == 'Премиальный клиент' and product in ['Премиальная карта', 'Золотые слитки', 'Инвестиции']:
+                     weight += 2
+                elif client_status == 'Студент' and product in ['Кредитная карта']:
+                     weight += 2
+                elif client_status == 'Зарплатный клиент' and product in ['Кредитная карта', 'Карта для путешествий']:
+                     weight += 1
 
-        if available_products:
-            # Select product based on weights
-            best_product = random.choices(
-                available_products,
-                weights=[product_weights[p] for p in available_products],
-                k=1
-            )[0]
-        elif top_n_products:
-             # фолбэки чтобы дать корректный шаблон
-             best_product = sorted_benefits[0][0]
+                product_weights[product] = weight
+
+            available_products = [p for p in product_weights.keys() if p in push_templates and (push_templates[p].get('young') or push_templates[p].get('adult') or push_templates[p].get('senior'))]
+
+            if available_products:
+                best_product = random.choices(
+                    available_products,
+                    weights=[product_weights[p] for p in available_products],
+                    k=1
+                )[0]
+            elif top_n_products:
+                 best_product = sorted_benefits[0][0]
+            else:
+                 best_product = max(benefits, key=benefits.get)
+
         else:
-             best_product = max(benefits, key=benefits.get) # Select product with highest nominal benefit
+            best_product = max(benefits, key=benefits.get)
 
-
-    else:
-        # фолбэк если нет продуктов к примеру выбираем здесь высший benefit
-        best_product = max(benefits, key=benefits.get)
-
-    push = make_push(name, best_product, ctx.get(best_product, {}), avg_balance, client_age) # client_age
-
-    # проверка пуша если не было
-    attempts = 0
-    initial_push = push
-    while push in used_pushes and attempts < 3:
         push = make_push(name, best_product, ctx.get(best_product, {}), avg_balance, client_age)
-        if push == initial_push: # Prevent infinite loop if only one template for age group
-             break
-        attempts += 1
 
-    used_pushes.add(push)
-    rows.append({'client_code': i, 'product': best_product, 'push_notification': push})
+        attempts = 0
+        initial_push = push
+        while push in used_pushes and attempts < 3:
+            push = make_push(name, best_product, ctx.get(best_product, {}), avg_balance, client_age)
+            if push == initial_push:
+                 break
+            attempts += 1
 
-out = pd.DataFrame(rows)
-out.to_csv('solution_case1_all_clients.csv', index=False)
-#на всякий случай для колаба если там будет запускаться
-if 'google.colab' in sys.modules:
-    display(out)
-else:
-    print(out.to_string())
-# в итоге получается максимально изящное решение!
-print("Готово! Файл solution_case1_all_clients.csv обновлен.")
-# ----- не стесняйтесь писать в телеграм @fadeinvoid -----
+        used_pushes.add(push)
+        rows.append({'client_code': i, 'product': best_product, 'push_notification': push})
+
+    return pd.DataFrame(rows)
