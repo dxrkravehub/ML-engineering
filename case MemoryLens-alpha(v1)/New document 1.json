@@ -1,0 +1,25 @@
+{
+  "query": "девушка",
+  "results": [
+    {
+      "timestamp_sec": 10.3,
+      "timecode": "00:00:10.300",
+      "text": "",
+      "frame_path": null,
+      "initial_score": 0.4189,
+      "blip_caption": null,
+      "video_id": "out001",
+      "_comments":"it's a moment when CLIP captioned a girl ",
+      "_comments_r":"это момент когда CLIP запечатлел девушку по запросу "
+    },
+    {
+      "timestamp_sec": 39.6,
+      "timecode": "00:00:39.600",
+      "text": "Ever gonna give you up Ever gonna let you down Ever gonna run around and desert you Ever gonna make you cry",
+      "frame_path": null,
+      "initial_score": 0.2757,
+      "blip_caption": null,
+      "video_id": "out002"
+    }
+  ]
+}
