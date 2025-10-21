@@ -1,4 +1,33 @@
-ffmpeg
-whisper
-moviepy
-transformers
+# Requirements for MemoryLens demo
+# Notes:
+# - If you plan to run on GPU, install a CUDA-compatible PyTorch build
+#   from https://pytorch.org/ instead of the CPU-only wheel.
+# - Some libraries (BLIP, custom CLIP variants) may require additional packages
+#   or installing from source. Adjust versions to your environment.
+
+# Core ML / speech
+faster-whisper>=0.8.0
+transformers>=4.30.0
+sentence-transformers>=2.2.2
+
+# Deep learning runtime (choose appropriate CUDA build for GPU)
+torch>=1.13.1
+
+# Vector search
+faiss-cpu>=1.7.4
+
+# Images, video and I/O
+opencv-python>=4.7.0
+Pillow>=9.5.0
+numpy>=1.24.0
+requests>=2.28.0
+
+# Optional web demo (FastAPI)
+fastapi>=0.95.0
+uvicorn[standard]>=0.22.0
+
+# Utilities
+scikit-learn>=1.2.2
+
+# Optional/extra (uncomment if using CLIP/BLIP from certain sources)
+# git+https://github.com/salesforce/BLIP.git@main
