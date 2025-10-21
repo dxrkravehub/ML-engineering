@@ -1,6 +1,6 @@
 # 📹 MemoryLens
 
-**MemoryLens** — это экспериментальная система для поиска по содержимому видео.  
+**MemoryLens** это экспериментальная система для поиска по содержимому видео.  
 Проект основан на классе `MemoryLens` из файла `main.py` и реализует полный конвейер обработки: от транскрипции аудио до поиска по кадрам.
 
 ---
@@ -9,18 +9,18 @@
 
 MemoryLens объединяет современные методы компьютерного зрения и обработки естественного языка:
 
-1. **Транскрипция аудио** — преобразование звуковой дорожки в текст с помощью *Whisper* (`faster_whisper`).
-2. **Сэмплирование кадров** — извлечение ключевых кадров из видео (`OpenCV`).
-3. **Создание эмбеддингов** — генерация векторов для текста и изображений (*CLIP*, *SentenceTransformers*).
-4. **Построение поисковых индексов** — гибридный индекс на базе *FAISS* (`DualIndex`).
-5. **Поиск и реренкинг** — поиск релевантных кадров с уточнением результатов через *BLIP*-подписи (автоматические описания изображений).
+1. **Транскрипция аудио** - преобразование звуковой дорожки в текст с помощью *Whisper* (`faster_whisper`).
+2. **Сэмплирование кадров** - извлечение ключевых кадров из видео (`OpenCV`).
+3. **Создание эмбеддингов** - генерация векторов для текста и изображений (*CLIP*, *SentenceTransformers*).
+4. **Построение поисковых индексов** - гибридный индекс на базе *FAISS* (`DualIndex`).
+5. **Поиск и реренкинг** - поиск релевантных кадров с уточнением результатов через *BLIP*-подписи (автоматические описания изображений).
 
 ---
 
 ## 🖼️ Примеры Работы
-![Frontend Demo]("case MemoryLens-alpha(v1)/demo.jpg")
-![Search Result Example]("case MemoryLens-alpha(v1)/dem.jpg")
-![Extracted Frame Example]("case MemoryLens-alpha(v1)/frame_000250.jpg")
+![Frontend Demo](demo.jpg)
+![Search Result Example](dem.jpg)
+![Extracted Frame Example](frame_000250.jpg)
 
 ---
 
@@ -42,12 +42,8 @@ MemoryLens объединяет современные методы компью
 
 - Python **3.8+**
 - Установленные инструменты: `git`, `pip`
-- Рекомендуемые пакеты:
-  - `uvicorn`, `fastapi`, `pillow`
-  - `faster-whisper`, `transformers`, `sentence-transformers`
-  - `faiss-cpu`, `opencv-python`, `torch`
 
 Установка зависимостей:
 
 ```bash
-pip install fastapi uvicorn pillow faster-whisper transformers sentence-transformers faiss-cpu opencv-python torch
+pip install -r requirements.txt
